@@ -1,0 +1,3 @@
+#!/bin/bash
+curl https://raw.githubusercontent.com/gfwlist/gfwlist/master/gfwlist.txt | base64 -d |grep '^||' | sed s/'^..'//g | sort | uniq | sed s/^/'server=\/'/g | sed s/$/'\/8.8.8.8'/g > /etc/dnsmasq.d/gfw.list
+/etc/init.d/dnsmasq restart

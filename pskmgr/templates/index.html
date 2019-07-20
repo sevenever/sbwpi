@@ -1,0 +1,40 @@
+<h1>current state:</h1>
+{% if connected %}
+<h1 style="color:green">Connected</h1>
+{% else %}
+<h1 style="color:red">Not Connected</h1>
+<textarea cols=80 rows=10>
+{{ wlan1 }}
+</textarea>
+{%endif%}
+<h1>current conf:</h1>
+<textarea cols=80 rows=10>
+{{ conf }}
+</textarea>
+<h1>SSIDs</h1>
+<form method="POST" action="add">
+<select name="ssid" >
+{% for ssid in scans %}
+	<option value="{{ ssid }}" {% if loop.first %}selected{% endif %}>{{ ssid }}</option>
+{% endfor %}
+</select>
+<input type=text name="psk">
+<input type=submit value="add">
+</form>
+<ul>
+{% for psk in psks %}
+<li style="border: 1px solid black">
+<form method="POST" action="del">
+	<input type=hidden name=ssid value="{{ psk.ssid }}">
+	SSID:{{ psk.ssid }}<br/>
+	password:{{ psk.psk }}<br/>
+	<input type=submit value="delete">
+</form>
+<form method="POST" action="apply">
+	<input type=hidden name=ssid value="{{ psk.ssid }}">
+	<input type=hidden name=psk value="{{ psk.psk }}">
+	<input type=submit value="apply"><br/>
+</form>
+{% endfor %}
+</li>
+</ul>

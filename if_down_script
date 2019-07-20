@@ -1,0 +1,4 @@
+#!/bin/bash
+
+# prevent dnsmasq from being poisoned (make sure only add once)
+ip route |grep 8.8.8.8 |grep unreachable >/dev/null || ip route add unreachable 8.8.8.8/32

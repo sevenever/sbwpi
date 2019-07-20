@@ -1,0 +1,8 @@
+#!/bin/bash
+
+TUNNAME=$1
+PEER_VPN_ADDR=$3
+
+# use 8.8.8.8
+ip route del 8.8.8.8/32
+ip route add 8.8.8.8/32 via ${PEER_VPN_ADDR} dev ${TUNNAME}
