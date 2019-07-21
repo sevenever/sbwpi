@@ -1,0 +1,10 @@
+[Unit]
+Description=sha bi wan dian nao
+After=network.target
+
+[Service]
+Type=forking
+ExecStart=/bin/bash SBWPI_DIR/sbwdnservice
+
+[Install]
+WantedBy=multi-user.target

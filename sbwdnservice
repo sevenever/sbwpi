@@ -1,0 +1,28 @@
+#!/bin/bash
+
+sleep 20
+
+killall wpa_supplicant
+
+ip link set wlan1 up
+
+sleep 3
+
+ip link set wlan1 up
+
+ifup wlan1
+
+(cd SBWPI_DIR/pskmgr ; FLASK_APP=pskmgr.py python -m flask run --host=0.0.0.0 --port=80 &)
+
+SBWPI_DIR/sbwdn/sbwdn -f SBWPI_DIR/sbwdn/client.conf
+
+which iptables-legacy
+if [ $? == 0 ];then
+    echo "iptables-legacy exists, use it"
+    IPTABLES=iptables-legacy
+else
+    IPTABLES=iptables
+fi
+
+$IPTABLES-restore < SBWPI_DIR/iptables.rule
+

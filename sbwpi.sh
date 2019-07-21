@@ -15,6 +15,14 @@ do
     fi
 done
 
+echo "Allow access router from outside?"
+select yn in "Yes" "No"; do
+    case $yn in
+        Yes ) ALLOW_WAN_INPUT=yes; break;;
+        No ) break;;
+    esac
+done
+
 which iptables-legacy
 if [ $? == 0 ];then
     echo "iptables-legacy exists, use it"
@@ -50,18 +58,30 @@ install_softwares() {
 # setup udev, internal is wlan0, usb wifi is wlan1
 setup_udev() {
     echo "setting up udev rules so that internal wifi will be wlan0 as ap, usb wifi douge will be wlan1"
-    # get current mac
-    ip link show wlan0 | grep 'link/ether b8:27:eb'
-    if [ $? == 0 ];then
-        MYMAC='b8:27:eb'
-    else
-        # pi 4
-        MYMAC='dc:26:32'
+    # find internal wlan mac
+    for ((i=0; i<3; i++));
+    do
+        ip link show wlan$i
+        if [ $? == 0 ];then
+            ip link show wlan$i | grep 'link/ether dc:26:32'
+            OUI_4=$?
+            ip link show wlan$i | grep 'link/ether b8:27:eb'
+            OUI_3=$?
+            if [[ $OUI_4 == 0 || $OUI_3 == 0 ]];then
+                WLAN0_MAC=$(ip link show wlan$i | grep 'link/ether' | sed 's/  */,/g' | cut -d ',' -f 3)
+                break
+            fi
+        fi
+    done
+
+    if [ -z $WLAN0_MAC ];then
+        echo "failed to find mac addr for internal wifi interface" >&2
+        return 1
     fi
 
-    rm /etc/udev/rules.d/72-sbwpi-static-wlan-name.rules || return 1
-    echo 'SUBSYSTEM=="net", ACTION=="add", DRIVERS=="?*", ATTR{address}=="'${MYMAC}*'", KERNEL=="wl*", NAME="wlan0"' >> /etc/udev/rules.d/72-sbwpi-static-wlan-name.rules || return 1
-    echo 'SUBSYSTEM=="net", ACTION=="add", DRIVERS=="?*", ATTR{address}!="'${MYMAC}*'", KERNEL=="wl*", NAME="wlan1"' >> /etc/udev/rules.d/72-sbwpi-static-wlan-name.rules || return 1
+    rm -f /etc/udev/rules.d/72-sbwpi-static-wlan-name.rules || return 1
+    echo 'SUBSYSTEM=="net", ACTION=="add", DRIVERS=="?*", ATTR{address}=="'${WLAN0_MAC}'", KERNEL=="wl*", NAME="wlan0"' >> /etc/udev/rules.d/72-sbwpi-static-wlan-name.rules || return 1
+    echo 'SUBSYSTEM=="net", ACTION=="add", DRIVERS=="?*", ATTR{address}!="'${WLAN0_MAC}'", KERNEL=="wl*", NAME="wlan1"' >> /etc/udev/rules.d/72-sbwpi-static-wlan-name.rules || return 1
 
     return 0
 }
@@ -69,10 +89,10 @@ setup_udev() {
 # setup ap
 setup_ap() {
     echo "setting up access point"
-    systemctl stop hostapd || return 1
-    systemctl stop dnsmasq || return 1
+    systemctl stop hostapd
+    systemctl stop dnsmasq
 
-    cat /etc/dhcpcd.conf | grep 'static ip_address=192.168.4.1/24'
+    cat /etc/dhcpcd.conf | grep '^#sbwdn change'
     if [ $? == 0 ];then
         echo "looks like dhcpcd.conf has already been updated, will ignore..."
     else
@@ -88,8 +108,6 @@ setup_ap() {
     systemctl unmask hostapd || return 1
     systemctl enable hostapd || return 1
     systemctl enable dnsmasq || return 1
-    systemctl start hostapd || return 1
-    systemctl start dnsmasq || return 1
 
     return 0
 }
@@ -164,15 +182,16 @@ setup_crontab() {
     return 0
 }
 
-# set up /etc/rc.local file
-setup_rc_local() {
-    echo "setting up /etc/rc.local to launch pskmgr when reboot"
-    cp -pr rc.local /etc/rc.local || return 1
+# set up sbwdn.service
+setup_service() {
+    echo "setting up systemd service to launch pskmgr when reboot"
 
-    echo "(cd $SBWPI_DIR/pskmgr ; FLASK_APP=pskmgr.py python -m flask run --host=0.0.0.0 --port=80 &)" >> /etc/rc.local || return 1
-    echo "$SBWPI_DIR/sbwdn/sbwdn -f $SBWPI_DIR/sbwdn/client.conf" >> /etc/rc.local || return 1
-    echo "$IPTABLES-restore < $SBWPI_DIR/iptables.rule" >> /etc/rc.local || return 1
-    echo "exit 0" >> /etc/rc.local || return 1
+    cat sbwdn.service | sed "s~SBWPI_DIR~$SBWPI_DIR~g" > /etc/systemd/system/sbwdn.service || return 1
+    cat sbwdnservice | sed "s~SBWPI_DIR~$SBWPI_DIR~g" > sbwdnservice.tmp
+    mv sbwdnservice.tmp sbwdnservice
+    chmod 755 sbwdnservice
+
+    systemctl enable sbwdn.service || return 1
 
     return 0
 }
@@ -201,6 +220,10 @@ setup_firewall() {
     $IPTABLES -t filter -A INPUT -p udp --dport 67 -s 192.168.4.1/24 -j ACCEPT
     $IPTABLES -t filter -A INPUT -p tcp --dport 22 -s 192.168.4.1/24 -j ACCEPT
     $IPTABLES -t filter -A INPUT -p tcp --dport 80 -s 192.168.4.1/24 -j ACCEPT
+    if [ ! -z $ALLOW_WAN_INPUT ];then
+        $IPTABLES -t filter -A INPUT -i eth0 -j ACCEPT
+        $IPTABLES -t filter -A INPUT -i wlan1 -j ACCEPT
+    fi
 
 
     $IPTABLES-save > iptables.rule
@@ -219,7 +242,7 @@ config_sbwdn || exit 1
 launch_sbwdn || exit 1
 setup_dnsmasq || exit 1
 setup_crontab || exit 1
-setup_rc_local || exit 1
+setup_service || exit 1
 setup_firewall || exit 1
 
 echo "Successfully setup pi for sbwdn"
