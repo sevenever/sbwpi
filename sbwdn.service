@@ -4,6 +4,8 @@ After=network.target
 
 [Service]
 Type=forking
+TimeoutStartSec=infinity
+RuntimeMaxSec=infinity
 ExecStart=/bin/bash SBWPI_DIR/sbwdnservice
 
 [Install]
