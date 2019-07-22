@@ -217,9 +217,9 @@ setup_firewall() {
     $IPTABLES -t filter -A INPUT -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
     $IPTABLES -t filter -A INPUT -p icmp -m icmp --icmp-type 8 -j ACCEPT
     $IPTABLES -t filter -A INPUT -p udp --dport 53 -s 192.168.4.1/24 -j ACCEPT
-    $IPTABLES -t filter -A INPUT -p udp --dport 67 -s 192.168.4.1/24 -j ACCEPT
     $IPTABLES -t filter -A INPUT -p tcp --dport 22 -s 192.168.4.1/24 -j ACCEPT
     $IPTABLES -t filter -A INPUT -p tcp --dport 80 -s 192.168.4.1/24 -j ACCEPT
+    $IPTABLES -t filter -A INPUT -p udp --dport 67 -i wlan0 -j ACCEPT
     if [ ! -z $ALLOW_WAN_INPUT ];then
         $IPTABLES -t filter -A INPUT -i eth0 -j ACCEPT
         $IPTABLES -t filter -A INPUT -i wlan1 -j ACCEPT
